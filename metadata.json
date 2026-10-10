@@ -2,5 +2,7 @@
   "name": "Team Aura - Free Fire Tournament",
   "description": "Premier Free Fire esports tournament platform by Team Aura. Join custom rooms, win cash prizes with bKash/Nagad wallet integration, view live room credentials, and track your stats.",
   "requestFramePermissions": [],
-  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+  "majorCapabilities": [
+    "MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"
+  ]
 }

@@ -12,10 +12,26 @@
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=Chakra+Petch:wght@400;600;700&family=Inter:wght@300;400;500;600;700;800&family=Teko:wght@500;600;700&display=swap" rel="stylesheet">
+    <link rel="stylesheet" crossorigin href="./assets/index.css">
   </head>
   <body class="bg-[#0b0f19] text-slate-100 antialiased selection:bg-orange-500 selection:text-white">
     <div id="root"></div>
     <script type="module" src="/src/main.tsx"></script>
+    <script type="module">
+      // Universal fallback for static hosts like GitHub Pages where /src/main.tsx is not pre-compiled
+      window.addEventListener('DOMContentLoaded', () => {
+        setTimeout(() => {
+          const rootEl = document.getElementById('root');
+          if (rootEl && rootEl.children.length === 0) {
+            const script = document.createElement('script');
+            script.type = 'module';
+            script.crossOrigin = 'anonymous';
+            script.src = './assets/index.js';
+            document.body.appendChild(script);
+          }
+        }, 200);
+      });
+    </script>
   </body>
 </html>
 
