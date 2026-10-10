@@ -29,6 +29,7 @@ import { MyMatchesTab } from './components/MyMatchesTab';
 import { LeaderboardTab } from './components/LeaderboardTab';
 import { ProfileTab } from './components/ProfileTab';
 import { RulesModal } from './components/RulesModal';
+import { AuthModal } from './components/AuthModal';
 import { 
   DEFAULT_SETTINGS, 
   DEFAULT_USER, 
@@ -40,13 +41,19 @@ import {
   updateUserProfile,
   isConnectedToFirebase
 } from './lib/firebase';
+import { getActiveSession, logoutAccount } from './lib/auth';
 import { AppSettings, DepositRequest, Match, PaymentMethod, UserProfile, WithdrawRequest } from './types';
 import { sound } from './utils/sound';
 
 type NavTab = 'tournaments' | 'my-matches' | 'leaderboard' | 'profile';
 
 export default function App() {
-  const currentUserId = "user_demo_123";
+  // Authentication State
+  const [currentUser, setCurrentUser] = useState<UserProfile | null>(() => getActiveSession());
+  const [isAuthOpen, setIsAuthOpen] = useState<boolean>(false);
+  const [authInitialMode, setAuthInitialMode] = useState<'login' | 'register'>('login');
+
+  const currentUserId = currentUser ? currentUser.id : '';
 
   // Navigation
   const [activeTab, setActiveTab] = useState<NavTab>('tournaments');
@@ -57,8 +64,7 @@ export default function App() {
   const [matches, setMatches] = useState<Record<string, Match>>(INITIAL_MATCHES);
   const [deposits, setDeposits] = useState<Record<string, DepositRequest>>({});
   const [withdraws, setWithdraws] = useState<Record<string, WithdrawRequest>>({});
-  const [user, setUser] = useState<UserProfile>(DEFAULT_USER);
-  const [balance, setBalance] = useState<number>(DEFAULT_USER.balance);
+  const [balance, setBalance] = useState<number>(currentUser ? currentUser.balance : 0);
 
   // Filters & Search
   const [searchQuery, setSearchQuery] = useState<string>('');
@@ -86,21 +92,27 @@ export default function App() {
       if (val) setSettings(val);
     });
 
-    // 3. User Balance
-    const unsubBalance = subscribeToPath<number>(`users/${currentUserId}/balance`, DEFAULT_USER.balance, (val) => {
-      if (typeof val === 'number') {
-        setBalance(val);
-        setUser(prev => ({ ...prev, balance: val }));
-      }
-    });
+    // 3. User Balance (if logged in)
+    let unsubBalance = () => {};
+    let unsubUser = () => {};
 
-    // 4. User Profile
-    const unsubUser = subscribeToPath<UserProfile>(`users/${currentUserId}`, DEFAULT_USER, (val) => {
-      if (val) {
-        setUser(prev => ({ ...prev, ...val }));
-        if (typeof val.balance === 'number') setBalance(val.balance);
-      }
-    });
+    if (currentUserId) {
+      unsubBalance = subscribeToPath<number>(`users/${currentUserId}/balance`, currentUser?.balance || 0, (val) => {
+        if (typeof val === 'number') {
+          setBalance(val);
+          setCurrentUser(prev => prev ? { ...prev, balance: val } : prev);
+        }
+      });
+
+      unsubUser = subscribeToPath<UserProfile>(`users/${currentUserId}`, currentUser || DEFAULT_USER, (val) => {
+        if (val) {
+          setCurrentUser(prev => prev ? { ...prev, ...val } : val);
+          if (typeof val.balance === 'number') setBalance(val.balance);
+        }
+      });
+    } else {
+      setBalance(0);
+    }
 
     // 5. Matches
     const unsubMatches = subscribeToPath<Record<string, Match>>('matches', INITIAL_MATCHES, (val) => {
@@ -139,11 +151,33 @@ export default function App() {
     };
   }, [currentUserId]);
 
+  // Auth Operations
+  const handleOpenAuth = (mode: 'login' | 'register' = 'login') => {
+    setAuthInitialMode(mode);
+    setIsAuthOpen(true);
+  };
+
+  const handleLogout = () => {
+    logoutAccount();
+    setCurrentUser(null);
+    setBalance(0);
+    sound.playAlert();
+  };
+
+  const handleAuthSuccess = (authedUser: UserProfile) => {
+    setCurrentUser(authedUser);
+    setBalance(authedUser.balance || 0);
+  };
+
   // Actions
   const handleDeposit = async (data: { amount: number; trx: string; method: PaymentMethod; senderPhone?: string }) => {
+    if (!currentUser) {
+      handleOpenAuth('login');
+      return;
+    }
     await submitDepositRequest({
       userId: currentUserId,
-      userName: user.ign,
+      userName: currentUser.ign,
       amount: data.amount,
       trx: data.trx,
       senderPhone: data.senderPhone,
@@ -152,9 +186,13 @@ export default function App() {
   };
 
   const handleWithdraw = async (data: { amount: number; account: string; method: PaymentMethod }) => {
+    if (!currentUser) {
+      handleOpenAuth('login');
+      return;
+    }
     await submitWithdrawRequest({
       userId: currentUserId,
-      userName: user.ign,
+      userName: currentUser.ign,
       amount: data.amount,
       account: data.account,
       method: data.method,
@@ -162,6 +200,11 @@ export default function App() {
   };
 
   const handleConfirmJoin = async (matchId: string, ign: string, ffUid: string, fee: number) => {
+    if (!currentUser) {
+      handleOpenAuth('register');
+      return { success: false, message: 'Please create an account or sign in to join matches.' };
+    }
+
     const res = await registerForMatch(matchId, {
       userId: currentUserId,
       ign,
@@ -175,6 +218,24 @@ export default function App() {
       await updateUserProfile(currentUserId, { ign, ffUid });
     }
     return res;
+  };
+
+  const handleOpenWalletAction = () => {
+    if (!currentUser) {
+      sound.playAlert();
+      handleOpenAuth('login');
+      return;
+    }
+    setIsWalletOpen(true);
+  };
+
+  const handleJoinClickAction = (match: Match) => {
+    if (!currentUser) {
+      sound.playAlert();
+      handleOpenAuth('register');
+      return;
+    }
+    setSelectedMatchForJoin(match);
   };
 
   const handleToggleSound = () => {
@@ -195,7 +256,7 @@ export default function App() {
   });
 
   const enrolledCount = matchesList.filter(
-    (m) => m && m.participants && m.participants[currentUserId]
+    (m) => Boolean(m && m.participants && currentUserId && m.participants[currentUserId])
   ).length;
 
   return (
@@ -203,7 +264,10 @@ export default function App() {
       {/* Top Header */}
       <Header
         balance={balance}
-        onOpenWallet={() => setIsWalletOpen(true)}
+        user={currentUser}
+        onOpenWallet={handleOpenWalletAction}
+        onOpenAuth={handleOpenAuth}
+        onLogout={handleLogout}
         soundEnabled={soundEnabled}
         onToggleSound={handleToggleSound}
         onOpenRules={() => setIsRulesOpen(true)}
@@ -280,7 +344,7 @@ export default function App() {
                       key={m.id}
                       match={m}
                       currentUserId={currentUserId}
-                      onJoinClick={(match) => setSelectedMatchForJoin(match)}
+                      onJoinClick={handleJoinClickAction}
                       onViewDetails={(match) => setSelectedMatchForDetails(match)}
                     />
                   ))}
@@ -308,11 +372,16 @@ export default function App() {
         {/* Tab 4: Profile */}
         {activeTab === 'profile' && (
           <ProfileTab
-            user={user}
+            user={currentUser}
             settings={settings}
-            onOpenWallet={() => setIsWalletOpen(true)}
+            onOpenWallet={handleOpenWalletAction}
+            onOpenAuth={handleOpenAuth}
+            onLogout={handleLogout}
             onUpdateProfile={async (partial) => {
-              await updateUserProfile(currentUserId, partial);
+              if (currentUserId) {
+                await updateUserProfile(currentUserId, partial);
+                setCurrentUser(prev => prev ? { ...prev, ...partial } : prev);
+              }
             }}
             onOpenRules={() => setIsRulesOpen(true)}
           />
@@ -328,7 +397,7 @@ export default function App() {
               sound.playClick();
               setActiveTab('tournaments');
             }}
-            className={`flex flex-col items-center justify-center py-1.5 px-2 rounded-xl transition-all ${
+            className={`flex flex-col items-center justify-center py-1.5 px-2 rounded-xl transition-all cursor-pointer ${
               activeTab === 'tournaments'
                 ? 'text-orange-400 font-bold'
                 : 'text-slate-400 hover:text-slate-200'
@@ -344,7 +413,7 @@ export default function App() {
               sound.playClick();
               setActiveTab('my-matches');
             }}
-            className={`flex flex-col items-center justify-center py-1.5 px-2 rounded-xl transition-all relative ${
+            className={`flex flex-col items-center justify-center py-1.5 px-2 rounded-xl transition-all relative cursor-pointer ${
               activeTab === 'my-matches'
                 ? 'text-orange-400 font-bold'
                 : 'text-slate-400 hover:text-slate-200'
@@ -367,7 +436,7 @@ export default function App() {
               sound.playClick();
               setActiveTab('leaderboard');
             }}
-            className={`flex flex-col items-center justify-center py-1.5 px-2 rounded-xl transition-all ${
+            className={`flex flex-col items-center justify-center py-1.5 px-2 rounded-xl transition-all cursor-pointer ${
               activeTab === 'leaderboard'
                 ? 'text-orange-400 font-bold'
                 : 'text-slate-400 hover:text-slate-200'
@@ -383,7 +452,7 @@ export default function App() {
               sound.playClick();
               setActiveTab('profile');
             }}
-            className={`flex flex-col items-center justify-center py-1.5 px-2 rounded-xl transition-all ${
+            className={`flex flex-col items-center justify-center py-1.5 px-2 rounded-xl transition-all cursor-pointer ${
               activeTab === 'profile'
                 ? 'text-orange-400 font-bold'
                 : 'text-slate-400 hover:text-slate-200'
@@ -410,17 +479,19 @@ export default function App() {
       />
 
       {/* 2. Join Match Modal */}
-      <JoinMatchModal
-        isOpen={Boolean(selectedMatchForJoin)}
-        match={selectedMatchForJoin}
-        user={user}
-        onClose={() => setSelectedMatchForJoin(null)}
-        onConfirmJoin={handleConfirmJoin}
-        onOpenWallet={() => {
-          setSelectedMatchForJoin(null);
-          setIsWalletOpen(true);
-        }}
-      />
+      {currentUser && (
+        <JoinMatchModal
+          isOpen={Boolean(selectedMatchForJoin)}
+          match={selectedMatchForJoin}
+          user={currentUser}
+          onClose={() => setSelectedMatchForJoin(null)}
+          onConfirmJoin={handleConfirmJoin}
+          onOpenWallet={() => {
+            setSelectedMatchForJoin(null);
+            setIsWalletOpen(true);
+          }}
+        />
+      )}
 
       {/* 3. Match Details & Slots Modal */}
       <MatchDetailModal
@@ -430,7 +501,7 @@ export default function App() {
         onClose={() => setSelectedMatchForDetails(null)}
         onJoinClick={(match) => {
           setSelectedMatchForDetails(null);
-          setSelectedMatchForJoin(match);
+          handleJoinClickAction(match);
         }}
       />
 
@@ -438,6 +509,14 @@ export default function App() {
       <RulesModal
         isOpen={isRulesOpen}
         onClose={() => setIsRulesOpen(false)}
+      />
+
+      {/* 5. Authentication Modal */}
+      <AuthModal
+        isOpen={isAuthOpen}
+        onClose={() => setIsAuthOpen(false)}
+        onSuccess={handleAuthSuccess}
+        initialMode={authInitialMode}
       />
     </div>
   );

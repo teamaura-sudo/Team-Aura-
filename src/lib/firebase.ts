@@ -219,14 +219,16 @@ export function subscribeToPath<T>(path: string, defaultVal: T, callback: (data:
 export const DEFAULT_USER: UserProfile = {
   id: "user_demo_123",
   name: "Aura Legend",
+  email: "legend@teamaura.com",
   ign: "AURA_TITAN",
   ffUid: "294810482",
   phone: "01700112233",
-  balance: 150, // default starter balance
-  matchesPlayed: 4,
-  totalKills: 18,
-  totalWon: 340,
-  rankBadge: "Grandmaster",
+  balance: 0, // Requirement: initial balance must be set to 0
+  matchesPlayed: 0,
+  totalKills: 0,
+  totalWon: 0,
+  rankBadge: "Bronze I",
+  createdAt: Date.now(),
 };
 
 export async function getUserProfile(userId: string): Promise<UserProfile> {

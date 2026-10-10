@@ -11,15 +11,22 @@ import {
   MessageCircle, 
   Send, 
   ShieldCheck, 
-  Phone
+  Phone,
+  LogIn,
+  UserPlus,
+  LogOut,
+  Mail,
+  Shield
 } from 'lucide-react';
 import { AppSettings, UserProfile } from '../types';
 import { sound } from '../utils/sound';
 
 interface ProfileTabProps {
-  user: UserProfile;
+  user: UserProfile | null;
   settings: AppSettings;
   onOpenWallet: () => void;
+  onOpenAuth: (mode?: 'login' | 'register') => void;
+  onLogout: () => void;
   onUpdateProfile: (updated: Partial<UserProfile>) => Promise<void>;
   onOpenRules: () => void;
 }
@@ -28,15 +35,57 @@ export const ProfileTab: React.FC<ProfileTabProps> = ({
   user,
   settings,
   onOpenWallet,
+  onOpenAuth,
+  onLogout,
   onUpdateProfile,
   onOpenRules,
 }) => {
   const [isEditing, setIsEditing] = useState<boolean>(false);
-  const [ign, setIgn] = useState<string>(user.ign);
-  const [ffUid, setFfUid] = useState<string>(user.ffUid);
-  const [phone, setPhone] = useState<string>(user.phone);
+  const [ign, setIgn] = useState<string>(user?.ign || '');
+  const [ffUid, setFfUid] = useState<string>(user?.ffUid || '');
+  const [phone, setPhone] = useState<string>(user?.phone || '');
   const [isSaving, setIsSaving] = useState<boolean>(false);
   const [savedSuccess, setSavedSuccess] = useState<boolean>(false);
+
+  if (!user) {
+    return (
+      <div className="py-12 px-4 text-center max-w-md mx-auto space-y-5">
+        <div className="w-16 h-16 rounded-2xl bg-slate-800 border border-orange-500/30 mx-auto flex items-center justify-center text-orange-400">
+          <User className="w-8 h-8" />
+        </div>
+        <div className="space-y-1">
+          <h3 className="font-gaming font-bold text-xl text-slate-100">
+            Player Account Required
+          </h3>
+          <p className="text-xs text-slate-400 leading-relaxed">
+            Sign in or create a new tournament account to view your career statistics, manage Free Fire credentials, and view your wallet balance.
+          </p>
+        </div>
+        <div className="flex flex-col sm:flex-row gap-2.5 pt-2">
+          <button
+            onClick={() => {
+              sound.playClick();
+              onOpenAuth('login');
+            }}
+            className="flex-1 py-2.5 px-4 rounded-xl font-gaming font-bold text-xs bg-slate-800 hover:bg-slate-700 text-slate-100 border border-slate-700 flex items-center justify-center gap-2 cursor-pointer transition-colors"
+          >
+            <LogIn className="w-4 h-4 text-orange-400" />
+            <span>Sign In</span>
+          </button>
+          <button
+            onClick={() => {
+              sound.playClick();
+              onOpenAuth('register');
+            }}
+            className="flex-1 py-2.5 px-4 rounded-xl font-gaming font-bold text-xs bg-gradient-to-r from-orange-500 to-amber-500 hover:from-orange-600 text-slate-950 flex items-center justify-center gap-2 shadow-lg shadow-orange-500/20 cursor-pointer transition-all"
+          >
+            <UserPlus className="w-4 h-4" />
+            <span>Register (Balance ৳0)</span>
+          </button>
+        </div>
+      </div>
+    );
+  }
 
   const handleSave = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -274,6 +323,24 @@ export const ProfileTab: React.FC<ProfileTabProps> = ({
           <ShieldCheck className="w-4 h-4 text-orange-400" />
           <span>Fair Play & Disqualification Rules</span>
         </button>
+
+        {/* Security & Logout Button */}
+        <div className="pt-2 border-t border-slate-800 flex items-center justify-between text-xs">
+          <div className="text-slate-400">
+            <span className="block text-[11px]">Logged in as: {user.email || user.phone}</span>
+            <span className="text-[10px] text-slate-500">UID: {user.id}</span>
+          </div>
+          <button
+            onClick={() => {
+              sound.playClick();
+              onLogout();
+            }}
+            className="py-2 px-3 rounded-xl bg-rose-500/15 hover:bg-rose-500/25 border border-rose-500/30 text-rose-300 font-gaming font-bold text-xs flex items-center gap-1.5 transition-colors cursor-pointer"
+          >
+            <LogOut className="w-3.5 h-3.5 text-rose-400" />
+            <span>Sign Out</span>
+          </button>
+        </div>
       </div>
     </div>
   );

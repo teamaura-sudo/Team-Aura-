@@ -62,6 +62,7 @@ export interface WithdrawRequest {
 export interface UserProfile {
   id: string;
   name: string;
+  email: string;
   ign: string;
   ffUid: string;
   phone: string;
@@ -70,6 +71,10 @@ export interface UserProfile {
   totalKills: number;
   totalWon: number;
   rankBadge: string;
+  createdAt: number;
+  lastLoginAt?: number;
+  passwordHash?: string;
+  isVerified?: boolean;
 }
 
 export interface AppSettings {
