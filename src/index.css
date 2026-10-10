@@ -1,0 +1,60 @@
+@import "tailwindcss";
+
+@layer base {
+  body {
+    font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+  }
+}
+
+.font-gaming {
+  font-family: 'Chakra Petch', sans-serif;
+}
+
+.font-teko {
+  font-family: 'Teko', sans-serif;
+}
+
+/* Custom esports scrollbar */
+::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
+}
+
+::-webkit-scrollbar-track {
+  background: #0b0f19;
+}
+
+::-webkit-scrollbar-thumb {
+  background: #334155;
+  border-radius: 9999px;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: #ea580c;
+}
+
+/* Glow effects */
+.glow-orange {
+  box-shadow: 0 0 20px -3px rgba(249, 115, 22, 0.35);
+}
+
+.glow-orange-sm {
+  box-shadow: 0 0 10px -2px rgba(249, 115, 22, 0.3);
+}
+
+.glow-green {
+  box-shadow: 0 0 15px -3px rgba(34, 197, 94, 0.35);
+}
+
+.glow-cyan {
+  box-shadow: 0 0 15px -3px rgba(56, 189, 248, 0.35);
+}
+
+@keyframes pulse-subtle {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.6; }
+}
+
+.animate-pulse-subtle {
+  animation: pulse-subtle 2s cubic-bezier(0.4, 0, 0.6, 1) infinite;
+}
