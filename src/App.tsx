@@ -183,18 +183,19 @@ export default function App() {
   };
 
   // Filter matches list
-  const matchesList = Object.values(matches);
+  const matchesList = matches && typeof matches === 'object' ? Object.values(matches) : Object.values(INITIAL_MATCHES);
   const filteredMatches = matchesList.filter((m) => {
+    if (!m) return false;
     const matchesFilter = selectedFilter === 'All' || m.version === selectedFilter;
     const matchesSearch = 
-      m.title.toLowerCase().includes(searchQuery.toLowerCase()) ||
-      m.map.toLowerCase().includes(searchQuery.toLowerCase()) ||
-      m.version.toLowerCase().includes(searchQuery.toLowerCase());
+      (m.title || '').toLowerCase().includes(searchQuery.toLowerCase()) ||
+      (m.map || '').toLowerCase().includes(searchQuery.toLowerCase()) ||
+      (m.version || '').toLowerCase().includes(searchQuery.toLowerCase());
     return matchesFilter && matchesSearch;
   });
 
   const enrolledCount = matchesList.filter(
-    (m) => m.participants && m.participants[currentUserId]
+    (m) => m && m.participants && m.participants[currentUserId]
   ).length;
 
   return (
