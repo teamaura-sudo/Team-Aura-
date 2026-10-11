@@ -1,5 +1,5 @@
-import React, { useState } from 'react';
-import { X, Swords, Trophy, MapPin, UserCheck, AlertTriangle } from 'lucide-react';
+import React, { useState, useEffect } from 'react';
+import { X, Swords, Trophy, MapPin, UserCheck, AlertTriangle, ShieldCheck, Edit3 } from 'lucide-react';
 import { Match, UserProfile } from '../types';
 import { sound } from '../utils/sound';
 import confetti from 'canvas-confetti';
@@ -23,22 +23,37 @@ export const JoinMatchModal: React.FC<JoinMatchModalProps> = ({
 }) => {
   const [ign, setIgn] = useState<string>(user.ign || '');
   const [ffUid, setFfUid] = useState<string>(user.ffUid || '');
+  const [isEditingCredentials, setIsEditingCredentials] = useState<boolean>(false);
   const [isSubmitting, setIsSubmitting] = useState<boolean>(false);
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
+
+  // Sync with user profile on open
+  useEffect(() => {
+    if (isOpen && user) {
+      setIgn(user.ign || '');
+      setFfUid(user.ffUid || '');
+      setIsEditingCredentials(!user.ign || !user.ffUid);
+      setErrorMsg(null);
+    }
+  }, [isOpen, user]);
 
   if (!isOpen || !match) return null;
 
   const hasEnoughBalance = user.balance >= match.fee;
   const balanceAfter = user.balance - match.fee;
+  const hasSavedProfile = Boolean(user.ign && user.ffUid);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!ign.trim()) {
+    const finalIgn = ign.trim();
+    const finalUid = ffUid.trim();
+
+    if (!finalIgn) {
       setErrorMsg('Please enter your Free Fire In-Game Name (IGN)');
       sound.playAlert();
       return;
     }
-    if (!ffUid.trim()) {
+    if (!finalUid) {
       setErrorMsg('Please enter your Free Fire UID (e.g. 29381029)');
       sound.playAlert();
       return;
@@ -52,7 +67,7 @@ export const JoinMatchModal: React.FC<JoinMatchModalProps> = ({
     try {
       setIsSubmitting(true);
       setErrorMsg(null);
-      const res = await onConfirmJoin(match.id, ign.trim(), ffUid.trim(), match.fee);
+      const res = await onConfirmJoin(match.id, finalIgn, finalUid, match.fee);
       if (res.success) {
         sound.playSuccess();
         confetti({
@@ -99,7 +114,7 @@ export const JoinMatchModal: React.FC<JoinMatchModalProps> = ({
               sound.playClick();
               onClose();
             }}
-            className="p-1.5 rounded-lg text-slate-400 hover:text-white hover:bg-slate-800 transition-colors"
+            className="p-1.5 rounded-lg text-slate-400 hover:text-white hover:bg-slate-800 transition-colors cursor-pointer"
           >
             <X className="w-5 h-5" />
           </button>
@@ -156,7 +171,7 @@ export const JoinMatchModal: React.FC<JoinMatchModalProps> = ({
                   sound.playClick();
                   onOpenWallet();
                 }}
-                className="px-2.5 py-1 rounded bg-emerald-500 hover:bg-emerald-600 text-slate-950 font-gaming font-bold text-xs shrink-0 transition-colors"
+                className="px-2.5 py-1 rounded bg-emerald-500 hover:bg-emerald-600 text-slate-950 font-gaming font-bold text-xs shrink-0 transition-colors cursor-pointer"
               >
                 Add Money
               </button>
@@ -169,38 +184,87 @@ export const JoinMatchModal: React.FC<JoinMatchModalProps> = ({
             </div>
           )}
 
-          {/* Registration Form */}
+          {/* Free Fire Credentials Section - 1-Click Saved Profile */}
           <form onSubmit={handleSubmit} className="space-y-3">
-            <div>
-              <label className="text-xs font-semibold text-slate-300 mb-1 block">
-                Free Fire In-Game Name (IGN):
-              </label>
-              <input
-                type="text"
-                value={ign}
-                onChange={(e) => setIgn(e.target.value)}
-                placeholder="Exact nickname used in Free Fire"
-                required
-                className="w-full bg-[#0f172a] border border-slate-700 rounded-xl px-3 py-2.5 text-sm text-white placeholder-slate-500 focus:outline-none focus:border-orange-500 font-semibold"
-              />
-              <p className="text-[11px] text-slate-400 mt-1">
-                Must match your in-game nickname for verification.
-              </p>
-            </div>
+            {hasSavedProfile && !isEditingCredentials ? (
+              <div className="bg-emerald-950/30 border border-emerald-500/40 p-3.5 rounded-xl space-y-2">
+                <div className="flex items-center justify-between">
+                  <span className="text-xs font-bold text-emerald-400 flex items-center gap-1.5">
+                    <ShieldCheck className="w-4 h-4" />
+                    <span>Saved Free Fire Credentials Loaded</span>
+                  </span>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      sound.playClick();
+                      setIsEditingCredentials(true);
+                    }}
+                    className="text-[11px] text-slate-400 hover:text-white flex items-center gap-1 underline"
+                  >
+                    <Edit3 className="w-3 h-3" />
+                    <span>Change</span>
+                  </button>
+                </div>
+                <div className="grid grid-cols-2 gap-2 text-xs pt-1">
+                  <div className="bg-slate-900/80 px-2.5 py-1.5 rounded-lg border border-slate-800">
+                    <span className="text-[10px] text-slate-400 block">In-Game Name (IGN)</span>
+                    <span className="font-bold text-slate-100">{ign}</span>
+                  </div>
+                  <div className="bg-slate-900/80 px-2.5 py-1.5 rounded-lg border border-slate-800">
+                    <span className="text-[10px] text-slate-400 block">Player UID</span>
+                    <span className="font-mono font-bold text-emerald-400">{ffUid}</span>
+                  </div>
+                </div>
+                <p className="text-[10px] text-emerald-400/80">
+                  ⚡ Auto-filled from your profile. No need to retype!
+                </p>
+              </div>
+            ) : (
+              <div className="space-y-3 bg-[#0f172a] p-3 rounded-xl border border-slate-800">
+                <div className="flex items-center justify-between">
+                  <span className="text-xs font-semibold text-slate-300">
+                    Free Fire Player Details:
+                  </span>
+                  {hasSavedProfile && (
+                    <button
+                      type="button"
+                      onClick={() => setIsEditingCredentials(false)}
+                      className="text-[11px] text-orange-400 hover:underline"
+                    >
+                      Use Saved Profile
+                    </button>
+                  )}
+                </div>
 
-            <div>
-              <label className="text-xs font-semibold text-slate-300 mb-1 block">
-                Free Fire Player UID:
-              </label>
-              <input
-                type="text"
-                value={ffUid}
-                onChange={(e) => setFfUid(e.target.value)}
-                placeholder="e.g. 294810482"
-                required
-                className="w-full bg-[#0f172a] border border-slate-700 rounded-xl px-3 py-2.5 text-sm text-white placeholder-slate-500 focus:outline-none focus:border-orange-500 font-mono"
-              />
-            </div>
+                <div>
+                  <label className="text-[11px] font-semibold text-slate-400 mb-1 block">
+                    In-Game Name (IGN):
+                  </label>
+                  <input
+                    type="text"
+                    value={ign}
+                    onChange={(e) => setIgn(e.target.value)}
+                    placeholder="Exact Free Fire nickname"
+                    required
+                    className="w-full bg-slate-900 border border-slate-700 rounded-lg px-3 py-2 text-xs text-white placeholder-slate-500 focus:outline-none focus:border-orange-500 font-semibold"
+                  />
+                </div>
+
+                <div>
+                  <label className="text-[11px] font-semibold text-slate-400 mb-1 block">
+                    Free Fire UID:
+                  </label>
+                  <input
+                    type="text"
+                    value={ffUid}
+                    onChange={(e) => setFfUid(e.target.value)}
+                    placeholder="e.g. 294810482"
+                    required
+                    className="w-full bg-slate-900 border border-slate-700 rounded-lg px-3 py-2 text-xs text-white placeholder-slate-500 focus:outline-none focus:border-orange-500 font-mono"
+                  />
+                </div>
+              </div>
+            )}
 
             <div className="pt-2">
               <button

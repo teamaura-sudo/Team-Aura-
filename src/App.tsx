@@ -16,8 +16,12 @@ import {
   Layers, 
   CheckCircle2, 
   Sparkles,
-  Wifi,
-  WifiOff
+  Receipt,
+  Headphones,
+  Award,
+  Bell,
+  ShieldCheck,
+  ShieldAlert
 } from 'lucide-react';
 import { Header } from './components/Header';
 import { NoticeBanner } from './components/NoticeBanner';
@@ -30,6 +34,10 @@ import { LeaderboardTab } from './components/LeaderboardTab';
 import { ProfileTab } from './components/ProfileTab';
 import { RulesModal } from './components/RulesModal';
 import { AuthModal } from './components/AuthModal';
+import { TransactionHistoryTab } from './components/TransactionHistoryTab';
+import { WinnersResultsTab } from './components/WinnersResultsTab';
+import { LiveSupportModal } from './components/LiveSupportModal';
+import { NotificationModal } from './components/NotificationModal';
 import { 
   DEFAULT_SETTINGS, 
   DEFAULT_USER, 
@@ -39,13 +47,17 @@ import {
   submitWithdrawRequest, 
   registerForMatch, 
   updateUserProfile,
-  isConnectedToFirebase
+  isConnectedToFirebase,
+  getStoredNotifications,
+  markNotificationRead,
+  markAllNotificationsRead,
+  addNotification
 } from './lib/firebase';
 import { getActiveSession, logoutAccount } from './lib/auth';
-import { AppSettings, DepositRequest, Match, PaymentMethod, UserProfile, WithdrawRequest } from './types';
+import { AppNotification, AppSettings, DepositRequest, Match, PaymentMethod, UserProfile, WithdrawRequest } from './types';
 import { sound } from './utils/sound';
 
-type NavTab = 'tournaments' | 'my-matches' | 'leaderboard' | 'profile';
+export type NavTab = 'tournaments' | 'my-matches' | 'results' | 'transactions' | 'leaderboard' | 'profile';
 
 export default function App() {
   // Authentication State
@@ -66,6 +78,9 @@ export default function App() {
   const [withdraws, setWithdraws] = useState<Record<string, WithdrawRequest>>({});
   const [balance, setBalance] = useState<number>(currentUser ? currentUser.balance : 0);
 
+  // Notifications State
+  const [notifications, setNotifications] = useState<AppNotification[]>(() => getStoredNotifications());
+
   // Filters & Search
   const [searchQuery, setSearchQuery] = useState<string>('');
   const [selectedFilter, setSelectedFilter] = useState<'All' | 'Solo' | 'Squad' | 'Clash Squad'>('All');
@@ -73,6 +88,8 @@ export default function App() {
   // Modals
   const [isWalletOpen, setIsWalletOpen] = useState<boolean>(false);
   const [isRulesOpen, setIsRulesOpen] = useState<boolean>(false);
+  const [isSupportOpen, setIsSupportOpen] = useState<boolean>(false);
+  const [isNotificationsOpen, setIsNotificationsOpen] = useState<boolean>(false);
   const [selectedMatchForJoin, setSelectedMatchForJoin] = useState<Match | null>(null);
   const [selectedMatchForDetails, setSelectedMatchForDetails] = useState<Match | null>(null);
 
@@ -183,6 +200,14 @@ export default function App() {
       senderPhone: data.senderPhone,
       method: data.method,
     });
+    
+    // Add real-time user notification
+    const notif = addNotification({
+      title: 'Deposit Request Submitted',
+      message: `৳${data.amount} via ${data.method} (TrxID: ${data.trx}). Cashier team will verify shortly.`,
+      type: 'deposit',
+    });
+    setNotifications(prev => [notif, ...prev]);
   };
 
   const handleWithdraw = async (data: { amount: number; account: string; method: PaymentMethod }) => {
@@ -197,6 +222,14 @@ export default function App() {
       account: data.account,
       method: data.method,
     });
+
+    // Add real-time user notification
+    const notif = addNotification({
+      title: 'Withdrawal Processing',
+      message: `৳${data.amount} requested to ${data.method} (${data.account}). You will receive SMS upon dispatch.`,
+      type: 'withdraw',
+    });
+    setNotifications(prev => [notif, ...prev]);
   };
 
   const handleConfirmJoin = async (matchId: string, ign: string, ffUid: string, fee: number) => {
@@ -216,6 +249,14 @@ export default function App() {
     if (res.success) {
       // update profile in case ign or ffUid changed
       await updateUserProfile(currentUserId, { ign, ffUid });
+      const targetMatch = matches[matchId];
+      const notif = addNotification({
+        title: 'Tournament Slot Confirmed!',
+        message: `Registered for "${targetMatch?.title || 'Custom Room'}". Check 'My Matches' tab for live room password.`,
+        type: 'tournament',
+        linkMatchId: matchId,
+      });
+      setNotifications(prev => [notif, ...prev]);
     }
     return res;
   };
@@ -243,6 +284,44 @@ export default function App() {
     setSoundEnabled(enabled);
   };
 
+  // Notification actions
+  const handleMarkNotifRead = (id: string) => {
+    markNotificationRead(id);
+    setNotifications(prev => prev.map(n => n.id === id ? { ...n, read: true } : n));
+  };
+
+  const handleMarkAllNotifsRead = () => {
+    markAllNotificationsRead();
+    setNotifications(prev => prev.map(n => ({ ...n, read: true })));
+    sound.playSuccess();
+  };
+
+  const handleSendSimulationAlert = (type: 'room' | 'deposit' | 'tournament') => {
+    if (type === 'room') {
+      const created = addNotification({
+        title: '🔑 Room ID & Pass Released!',
+        message: 'Match #01 custom room is open: Room ID: 7489201, Pass: aura99. Enter Free Fire right now!',
+        type: 'room',
+      });
+      setNotifications(prev => [created, ...prev]);
+    } else if (type === 'deposit') {
+      const created = addNotification({
+        title: '✅ Deposit Request Approved!',
+        message: 'Your bKash deposit of ৳100 has been approved and credited to your wallet balance.',
+        type: 'deposit',
+      });
+      setNotifications(prev => [created, ...prev]);
+    } else {
+      const created = addNotification({
+        title: '🏆 New Tournament Published!',
+        message: '⚡ Bermuda Pro Clash is now live! Entry fee ৳30, total prize pool ৳1,500.',
+        type: 'tournament',
+      });
+      setNotifications(prev => [created, ...prev]);
+    }
+    sound.playCoin();
+  };
+
   // Filter matches list
   const matchesList = matches && typeof matches === 'object' ? Object.values(matches) : Object.values(INITIAL_MATCHES);
   const filteredMatches = matchesList.filter((m) => {
@@ -259,12 +338,17 @@ export default function App() {
     (m) => Boolean(m && m.participants && currentUserId && m.participants[currentUserId])
   ).length;
 
+  const unreadNotificationsCount = notifications.filter(n => !n.read).length;
+
   return (
     <div className="min-h-screen bg-[#0b0f19] text-slate-100 flex flex-col pb-20 sm:pb-24 selection:bg-orange-500 selection:text-slate-950">
       {/* Top Header */}
       <Header
         balance={balance}
         user={currentUser}
+        unreadNotificationsCount={unreadNotificationsCount}
+        onOpenNotifications={() => setIsNotificationsOpen(true)}
+        onOpenSupport={() => setIsSupportOpen(true)}
         onOpenWallet={handleOpenWalletAction}
         onOpenAuth={handleOpenAuth}
         onLogout={handleLogout}
@@ -274,9 +358,91 @@ export default function App() {
       />
 
       {/* Main Container */}
-      <main className="flex-1 max-w-4xl w-full mx-auto px-3.5 sm:px-6 pt-3 pb-8">
+      <main className="flex-1 max-w-4xl w-full mx-auto px-3 sm:px-6 pt-3 pb-8">
         {/* Notice Bar */}
         <NoticeBanner notice={notice} />
+
+        {/* Quick Navigation Filter Bar */}
+        <div className="flex items-center gap-1.5 overflow-x-auto pb-2 mb-3 text-xs border-b border-slate-800/80">
+          <button
+            onClick={() => {
+              sound.playClick();
+              setActiveTab('tournaments');
+            }}
+            className={`py-1.5 px-3 rounded-lg font-gaming font-semibold whitespace-nowrap transition-all border cursor-pointer ${
+              activeTab === 'tournaments'
+                ? 'bg-orange-500 text-slate-950 border-orange-500 shadow-md shadow-orange-500/20'
+                : 'bg-[#1e293b] text-slate-400 border-slate-800 hover:text-slate-200 hover:border-slate-700'
+            }`}
+          >
+            🔥 Tournaments
+          </button>
+
+          <button
+            onClick={() => {
+              sound.playClick();
+              setActiveTab('my-matches');
+            }}
+            className={`py-1.5 px-3 rounded-lg font-gaming font-semibold whitespace-nowrap transition-all border cursor-pointer flex items-center gap-1.5 ${
+              activeTab === 'my-matches'
+                ? 'bg-orange-500 text-slate-950 border-orange-500 shadow-md shadow-orange-500/20'
+                : 'bg-[#1e293b] text-slate-400 border-slate-800 hover:text-slate-200 hover:border-slate-700'
+            }`}
+          >
+            <Swords className="w-3.5 h-3.5" />
+            <span>My Matches</span>
+            {enrolledCount > 0 && (
+              <span className="bg-emerald-400 text-slate-950 text-[10px] font-bold px-1.5 py-0.2 rounded-full font-mono">
+                {enrolledCount}
+              </span>
+            )}
+          </button>
+
+          <button
+            onClick={() => {
+              sound.playClick();
+              setActiveTab('results');
+            }}
+            className={`py-1.5 px-3 rounded-lg font-gaming font-semibold whitespace-nowrap transition-all border cursor-pointer flex items-center gap-1.5 ${
+              activeTab === 'results'
+                ? 'bg-orange-500 text-slate-950 border-orange-500 shadow-md shadow-orange-500/20'
+                : 'bg-[#1e293b] text-slate-400 border-slate-800 hover:text-slate-200 hover:border-slate-700'
+            }`}
+          >
+            <Trophy className="w-3.5 h-3.5" />
+            <span>Winners & Results</span>
+          </button>
+
+          <button
+            onClick={() => {
+              sound.playClick();
+              setActiveTab('transactions');
+            }}
+            className={`py-1.5 px-3 rounded-lg font-gaming font-semibold whitespace-nowrap transition-all border cursor-pointer flex items-center gap-1.5 ${
+              activeTab === 'transactions'
+                ? 'bg-orange-500 text-slate-950 border-orange-500 shadow-md shadow-orange-500/20'
+                : 'bg-[#1e293b] text-slate-400 border-slate-800 hover:text-slate-200 hover:border-slate-700'
+            }`}
+          >
+            <Receipt className="w-3.5 h-3.5" />
+            <span>Transactions</span>
+          </button>
+
+          <button
+            onClick={() => {
+              sound.playClick();
+              setActiveTab('leaderboard');
+            }}
+            className={`py-1.5 px-3 rounded-lg font-gaming font-semibold whitespace-nowrap transition-all border cursor-pointer flex items-center gap-1.5 ${
+              activeTab === 'leaderboard'
+                ? 'bg-orange-500 text-slate-950 border-orange-500 shadow-md shadow-orange-500/20'
+                : 'bg-[#1e293b] text-slate-400 border-slate-800 hover:text-slate-200 hover:border-slate-700'
+            }`}
+          >
+            <Award className="w-3.5 h-3.5" />
+            <span>Leaderboard</span>
+          </button>
+        </div>
 
         {/* Tab 1: Running Tournaments */}
         {activeTab === 'tournaments' && (
@@ -289,7 +455,7 @@ export default function App() {
                   type="text"
                   value={searchQuery}
                   onChange={(e) => setSearchQuery(e.target.value)}
-                  placeholder="Search matches (Bermuda, Clash Squad, Squad...)"
+                  placeholder="Search matches (Bermuda, Clash Squad, Solo, Duo...)"
                   className="w-full bg-[#1e293b]/90 border border-slate-800 rounded-xl pl-10 pr-4 py-2.5 text-xs sm:text-sm text-slate-100 placeholder-slate-500 focus:outline-none focus:border-orange-500 transition-colors shadow-inner"
                 />
               </div>
@@ -322,7 +488,8 @@ export default function App() {
                   <Flame className="w-4 h-4 text-orange-400" />
                   <span>Running & Upcoming Tournaments ({filteredMatches.length})</span>
                 </span>
-                <span className="text-[11px] text-emerald-400 font-medium">
+                <span className="text-[11px] text-emerald-400 font-medium flex items-center gap-1">
+                  <span className="w-2 h-2 rounded-full bg-emerald-400 animate-pulse" />
                   Auto room code release
                 </span>
               </div>
@@ -364,12 +531,32 @@ export default function App() {
           />
         )}
 
-        {/* Tab 3: Leaderboard */}
+        {/* Tab 3: Winners & Results Section */}
+        {activeTab === 'results' && (
+          <WinnersResultsTab
+            matches={matchesList}
+            onOpenRules={() => setIsRulesOpen(true)}
+          />
+        )}
+
+        {/* Tab 4: Transaction History */}
+        {activeTab === 'transactions' && (
+          <TransactionHistoryTab
+            userId={currentUserId}
+            balance={balance}
+            deposits={deposits}
+            withdraws={withdraws}
+            onOpenWallet={handleOpenWalletAction}
+            onOpenAuth={() => handleOpenAuth('login')}
+          />
+        )}
+
+        {/* Tab 5: Leaderboard */}
         {activeTab === 'leaderboard' && (
           <LeaderboardTab />
         )}
 
-        {/* Tab 4: Profile */}
+        {/* Tab 6: Profile */}
         {activeTab === 'profile' && (
           <ProfileTab
             user={currentUser}
@@ -388,78 +575,94 @@ export default function App() {
         )}
       </main>
 
-      {/* Bottom Navigation Bar */}
+      {/* Floating Bottom Navigation Bar */}
       <nav className="fixed bottom-0 left-0 right-0 z-40 bg-[#0f172a]/95 backdrop-blur-md border-t border-slate-800 shadow-2xl">
-        <div className="max-w-md mx-auto grid grid-cols-4 py-1.5 px-2">
-          {/* Home / Tournaments */}
+        <div className="max-w-md mx-auto grid grid-cols-5 py-1 px-1">
+          {/* 1. Home / Tournaments */}
           <button
             onClick={() => {
               sound.playClick();
               setActiveTab('tournaments');
             }}
-            className={`flex flex-col items-center justify-center py-1.5 px-2 rounded-xl transition-all cursor-pointer ${
+            className={`flex flex-col items-center justify-center py-1.5 px-1 rounded-xl transition-all cursor-pointer ${
               activeTab === 'tournaments'
                 ? 'text-orange-400 font-bold'
                 : 'text-slate-400 hover:text-slate-200'
             }`}
           >
-            <Home className="w-5 h-5 mb-0.5" />
-            <span className="text-[11px] font-gaming">Tournaments</span>
+            <Home className="w-4 h-4 sm:w-5 sm:h-5 mb-0.5" />
+            <span className="text-[10px] sm:text-[11px] font-gaming">Matches</span>
           </button>
 
-          {/* My Matches */}
+          {/* 2. My Matches */}
           <button
             onClick={() => {
               sound.playClick();
               setActiveTab('my-matches');
             }}
-            className={`flex flex-col items-center justify-center py-1.5 px-2 rounded-xl transition-all relative cursor-pointer ${
+            className={`flex flex-col items-center justify-center py-1.5 px-1 rounded-xl transition-all relative cursor-pointer ${
               activeTab === 'my-matches'
                 ? 'text-orange-400 font-bold'
                 : 'text-slate-400 hover:text-slate-200'
             }`}
           >
             <div className="relative">
-              <Swords className="w-5 h-5 mb-0.5" />
+              <Swords className="w-4 h-4 sm:w-5 sm:h-5 mb-0.5" />
               {enrolledCount > 0 && (
-                <span className="absolute -top-1 -right-2 w-4 h-4 rounded-full bg-emerald-500 text-slate-950 font-bold text-[9px] flex items-center justify-center font-mono">
+                <span className="absolute -top-1 -right-2 w-3.5 h-3.5 rounded-full bg-emerald-500 text-slate-950 font-bold text-[8px] flex items-center justify-center font-mono">
                   {enrolledCount}
                 </span>
               )}
             </div>
-            <span className="text-[11px] font-gaming">My Matches</span>
+            <span className="text-[10px] sm:text-[11px] font-gaming">Joined</span>
           </button>
 
-          {/* Leaderboard */}
+          {/* 3. Results & Winners */}
           <button
             onClick={() => {
               sound.playClick();
-              setActiveTab('leaderboard');
+              setActiveTab('results');
             }}
-            className={`flex flex-col items-center justify-center py-1.5 px-2 rounded-xl transition-all cursor-pointer ${
-              activeTab === 'leaderboard'
+            className={`flex flex-col items-center justify-center py-1.5 px-1 rounded-xl transition-all cursor-pointer ${
+              activeTab === 'results'
                 ? 'text-orange-400 font-bold'
                 : 'text-slate-400 hover:text-slate-200'
             }`}
           >
-            <Trophy className="w-5 h-5 mb-0.5" />
-            <span className="text-[11px] font-gaming">Top Winners</span>
+            <Trophy className="w-4 h-4 sm:w-5 sm:h-5 mb-0.5" />
+            <span className="text-[10px] sm:text-[11px] font-gaming">Results</span>
           </button>
 
-          {/* Profile */}
+          {/* 4. Transactions */}
+          <button
+            onClick={() => {
+              sound.playClick();
+              setActiveTab('transactions');
+            }}
+            className={`flex flex-col items-center justify-center py-1.5 px-1 rounded-xl transition-all cursor-pointer ${
+              activeTab === 'transactions'
+                ? 'text-orange-400 font-bold'
+                : 'text-slate-400 hover:text-slate-200'
+            }`}
+          >
+            <Receipt className="w-4 h-4 sm:w-5 sm:h-5 mb-0.5" />
+            <span className="text-[10px] sm:text-[11px] font-gaming">Passbook</span>
+          </button>
+
+          {/* 5. Profile */}
           <button
             onClick={() => {
               sound.playClick();
               setActiveTab('profile');
             }}
-            className={`flex flex-col items-center justify-center py-1.5 px-2 rounded-xl transition-all cursor-pointer ${
+            className={`flex flex-col items-center justify-center py-1.5 px-1 rounded-xl transition-all cursor-pointer ${
               activeTab === 'profile'
                 ? 'text-orange-400 font-bold'
                 : 'text-slate-400 hover:text-slate-200'
             }`}
           >
-            <User className="w-5 h-5 mb-0.5" />
-            <span className="text-[11px] font-gaming">Profile</span>
+            <User className="w-4 h-4 sm:w-5 sm:h-5 mb-0.5" />
+            <span className="text-[10px] sm:text-[11px] font-gaming">Profile</span>
           </button>
         </div>
       </nav>
@@ -505,13 +708,31 @@ export default function App() {
         }}
       />
 
-      {/* 4. Rules Modal */}
+      {/* 4. Rules & Fair Play Modal */}
       <RulesModal
         isOpen={isRulesOpen}
         onClose={() => setIsRulesOpen(false)}
       />
 
-      {/* 5. Authentication Modal */}
+      {/* 5. Live Support & Help Center Modal */}
+      <LiveSupportModal
+        isOpen={isSupportOpen}
+        onClose={() => setIsSupportOpen(false)}
+        settings={settings}
+        user={currentUser}
+      />
+
+      {/* 6. Push Notifications & Alerts Modal */}
+      <NotificationModal
+        isOpen={isNotificationsOpen}
+        onClose={() => setIsNotificationsOpen(false)}
+        notifications={notifications}
+        onMarkRead={handleMarkNotifRead}
+        onMarkAllRead={handleMarkAllNotifsRead}
+        onSendSimulationAlert={handleSendSimulationAlert}
+      />
+
+      {/* 7. Authentication Modal (Register / Login) */}
       <AuthModal
         isOpen={isAuthOpen}
         onClose={() => setIsAuthOpen(false)}

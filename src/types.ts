@@ -13,6 +13,14 @@ export interface Participant {
   winnings?: number;
 }
 
+export interface MatchResultEntry {
+  rank: number;
+  teamOrIgn: string;
+  kills: number;
+  prize: number;
+  ffUid?: string;
+}
+
 export interface Match {
   id: string;
   title: string;
@@ -24,7 +32,7 @@ export interface Match {
   perKill: number;
   totalSlots: number;
   filledSlots: number;
-  startTime: string; // ISO or human readable like "Today 08:30 PM"
+  startTime: string; // e.g. "Today at 08:30 PM"
   startTimestamp?: number;
   roomId?: string;
   roomPass?: string;
@@ -32,6 +40,12 @@ export interface Match {
   participants?: Record<string, Participant>;
   winnerIgn?: string;
   winnerPrize?: number;
+  runnerUpIgn?: string;
+  runnerUpPrize?: number;
+  topFraggerIgn?: string;
+  topKills?: number;
+  completedAt?: number;
+  resultScoreboard?: MatchResultEntry[];
 }
 
 export interface DepositRequest {
@@ -86,4 +100,26 @@ export interface AppSettings {
   telegramSupport: string;
   minDeposit: number;
   minWithdraw: number;
+}
+
+export interface AppNotification {
+  id: string;
+  title: string;
+  message: string;
+  type: 'room' | 'deposit' | 'withdraw' | 'tournament' | 'system';
+  timestamp: number;
+  read: boolean;
+  linkMatchId?: string;
+}
+
+export interface SupportTicket {
+  id: string;
+  userId: string;
+  userName: string;
+  category: 'Deposit / bKash' | 'Withdrawal' | 'Room Code Issue' | 'Prize Claim' | 'General Query';
+  subject: string;
+  message: string;
+  status: 'Open' | 'Resolved' | 'In Progress';
+  timestamp: number;
+  adminReply?: string;
 }

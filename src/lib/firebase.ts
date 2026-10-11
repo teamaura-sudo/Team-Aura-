@@ -8,7 +8,7 @@ import {
   Database,
   DataSnapshot
 } from 'firebase/database';
-import { AppSettings, DepositRequest, Match, Participant, UserProfile, WithdrawRequest } from '../types';
+import { AppNotification, AppSettings, DepositRequest, Match, Participant, SupportTicket, UserProfile, WithdrawRequest } from '../types';
 
 export const firebaseConfig = {
   apiKey: "AIzaSyCDaISJPPkq8FkbxQP_VrWShTAzgicgUz8",
@@ -109,6 +109,71 @@ export const INITIAL_MATCHES: Record<string, Match> = {
     roomId: "9918204",
     roomPass: "aurawin",
     status: "Live",
+    participants: {}
+  },
+  "match_05": {
+    id: "match_05",
+    title: "👑 AURA PRO CHAMPIONSHIP - BERMUDA",
+    map: "Bermuda",
+    version: "Squad",
+    type: "TPP",
+    fee: 100,
+    prize: 3500,
+    perKill: 25,
+    totalSlots: 48,
+    filledSlots: 48,
+    startTime: "Yesterday at 09:00 PM",
+    startTimestamp: Date.now() - 1000 * 60 * 60 * 26,
+    roomId: "8192031",
+    roomPass: "final88",
+    status: "Completed",
+    winnerIgn: "AURA_Viper (Squad #4)",
+    winnerPrize: 2200,
+    runnerUpIgn: "BD_Headshot (Squad #12)",
+    runnerUpPrize: 900,
+    topFraggerIgn: "NOVA_Sniper",
+    topKills: 14,
+    completedAt: Date.now() - 1000 * 60 * 60 * 24,
+    resultScoreboard: [
+      { rank: 1, teamOrIgn: "AURA_Viper (Squad #4)", kills: 22, prize: 2200, ffUid: "10928374" },
+      { rank: 2, teamOrIgn: "BD_Headshot (Squad #12)", kills: 16, prize: 900, ffUid: "98371928" },
+      { rank: 3, teamOrIgn: "NOVA_Sniper (Squad #7)", kills: 14, prize: 400, ffUid: "29481923" },
+      { rank: 4, teamOrIgn: "DARK_Shadow (Squad #2)", kills: 8, prize: 0, ffUid: "77261920" },
+      { rank: 5, teamOrIgn: "RED_Hunter (Squad #9)", kills: 7, prize: 0, ffUid: "33819201" },
+    ],
+    participants: {
+      "user_p1": { userId: "user_p1", ign: "AURA_Viper", ffUid: "10928374", joinedAt: Date.now() - 1000 * 60 * 60 * 30, slotNumber: 4, kills: 9, winnings: 800 }
+    }
+  },
+  "match_06": {
+    id: "match_06",
+    title: "🎯 PURGATORY MIDNIGHT SNIPER SOLO",
+    map: "Purgatory",
+    version: "Solo",
+    type: "TPP",
+    fee: 25,
+    prize: 600,
+    perKill: 12,
+    totalSlots: 48,
+    filledSlots: 48,
+    startTime: "2 Days ago at 11:00 PM",
+    startTimestamp: Date.now() - 1000 * 60 * 60 * 50,
+    roomId: "4481092",
+    roomPass: "solo77",
+    status: "Completed",
+    winnerIgn: "RAZOR_X",
+    winnerPrize: 350,
+    runnerUpIgn: "GHOST_Killer",
+    runnerUpPrize: 150,
+    topFraggerIgn: "RAZOR_X",
+    topKills: 11,
+    completedAt: Date.now() - 1000 * 60 * 60 * 48,
+    resultScoreboard: [
+      { rank: 1, teamOrIgn: "RAZOR_X", kills: 11, prize: 350, ffUid: "88291039" },
+      { rank: 2, teamOrIgn: "GHOST_Killer", kills: 7, prize: 150, ffUid: "55192048" },
+      { rank: 3, teamOrIgn: "SNIPER_King", kills: 6, prize: 100, ffUid: "11928472" },
+      { rank: 4, teamOrIgn: "Viper_One", kills: 4, prize: 0, ffUid: "99281726" }
+    ],
     participants: {}
   }
 };
@@ -488,4 +553,86 @@ export async function adminUpdateNotice(noticeText: string): Promise<void> {
 
 export function isConnectedToFirebase(): boolean {
   return isFirebaseConnected;
+}
+
+// Notification System
+export const DEFAULT_NOTIFICATIONS: AppNotification[] = [
+  {
+    id: "notif_welcome",
+    title: "⚡ Welcome to Team Aura Esports!",
+    message: "Join daily Free Fire cash custom rooms, win real cash prizes via bKash & Nagad.",
+    type: "system",
+    timestamp: Date.now() - 3600000 * 2,
+    read: false,
+  },
+  {
+    id: "notif_room_tip",
+    title: "🔑 Room ID & Password Policy",
+    message: "Credentials are published strictly 10 minutes prior to match schedule. Save your Free Fire UID in Profile to join with 1-click!",
+    type: "room",
+    timestamp: Date.now() - 3600000,
+    read: false,
+  },
+  {
+    id: "notif_cashier",
+    title: "💰 Instant Cashier 24/7",
+    message: "Deposits via bKash & Nagad are processed rapidly. Remember: your initial account balance is strictly ৳0.",
+    type: "deposit",
+    timestamp: Date.now() - 1800000,
+    read: false,
+  }
+];
+
+export function getStoredNotifications(): AppNotification[] {
+  return getStorage<AppNotification[]>('notifications', DEFAULT_NOTIFICATIONS);
+}
+
+export function saveStoredNotifications(notifs: AppNotification[]): void {
+  setStorage('notifications', notifs);
+  notifyLocal('notifications', notifs);
+}
+
+export function addNotification(notif: Omit<AppNotification, 'id' | 'timestamp' | 'read'>): AppNotification {
+  const notifs = getStoredNotifications();
+  const newNotif: AppNotification = {
+    ...notif,
+    id: `notif_${Date.now()}_${Math.floor(Math.random() * 1000)}`,
+    timestamp: Date.now(),
+    read: false,
+  };
+  const updated = [newNotif, ...notifs];
+  saveStoredNotifications(updated);
+  return newNotif;
+}
+
+export function markNotificationRead(id: string): void {
+  const notifs = getStoredNotifications();
+  const updated = notifs.map(n => n.id === id ? { ...n, read: true } : n);
+  saveStoredNotifications(updated);
+}
+
+export function markAllNotificationsRead(): void {
+  const notifs = getStoredNotifications();
+  const updated = notifs.map(n => ({ ...n, read: true }));
+  saveStoredNotifications(updated);
+}
+
+// Support Ticket System
+export function getStoredSupportTickets(): SupportTicket[] {
+  return getStorage<SupportTicket[]>('support_tickets', []);
+}
+
+export function submitSupportTicket(ticket: Omit<SupportTicket, 'id' | 'timestamp' | 'status'>): SupportTicket {
+  const tickets = getStoredSupportTickets();
+  const newTicket: SupportTicket = {
+    ...ticket,
+    id: `ticket_${Date.now()}`,
+    timestamp: Date.now(),
+    status: 'Open',
+    adminReply: "Support ticket received! Our admin team is reviewing your inquiry and will reach out via WhatsApp / in-app update within 15-30 minutes."
+  };
+  const updated = [newTicket, ...tickets];
+  setStorage('support_tickets', updated);
+  notifyLocal('support_tickets', updated);
+  return newTicket;
 }
